@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Ảnh của bạn</h2>
+<div id="imgs"></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const imgs = params.get("imgs");
+
+if (imgs) {
+  imgs.split(",").forEach(url => {
+    const img = document.createElement("img");
+    img.src = url;
+    img.style.width = "200px";
+    img.style.display = "block";
+    document.getElementById("imgs").appendChild(img);
+  });
+}
+</script>
+
+</body>
+</html>

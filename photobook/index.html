@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>📸 Pink Photobooth</title>
+
+<link rel="icon" href="logo.svg">
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: linear-gradient(135deg, #ffc0cb, #ff9eb5);
+}
+
+.screen { display: none; }
+.active { display: flex; height: 100vh; }
+
+.app { display: flex; width: 100%; }
+
+.left, .right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.camera-box {
+  width: 280px;
+  background: white;
+  border-radius: 20px;
+  padding: 10px;
+  text-align: center;
+}
+
+video {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  border-radius: 15px;
+}
+
+.strip {
+  width: 200px;
+  background: white;
+  border-radius: 20px;
+  padding: 10px;
+  max-height: 90%;
+  overflow-y: auto;
+}
+
+.photo {
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+/* grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+
+.item { cursor: pointer; }
+
+.item img {
+  width: 100%;
+  height: auto;
+  max-height: 120px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.item.selected {
+  outline: 3px solid #ff4d6d;
+  border-radius: 10px;
+}
+
+button {
+  margin-top: 10px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 10px;
+  background: #ff4d6d;
+  color: white;
+  cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<!-- SCREEN 1 -->
+<div id="screen1" class="screen active">
+  <div class="app">
+
+    <div class="left">
+      <div class="camera-box">
+        <img src="logo.svg" style="width:60px;">
+        <h3>Pink Booth</h3>
+
+        <video id="camera" autoplay></video>
+
+        <button onclick="takePhoto()">📸 Chụp</button>
+        <button onclick="goNext()">➡️ Tiếp tục</button>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="strip" id="gallery"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SCREEN 2 -->
+<div id="screen2" class="screen">
+  <div style="width:100%">
+    <h2 style="text-align:center">Chọn ảnh</h2>
+
+    <div class="grid" id="grid"></div>
+
+    <div style="text-align:center">
+      <button onclick="exportImages()">📥 Xuất + QR</button>
+      <button onclick="goHome()">🏠 Trang chính</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CLOUD_NAME = "dspvy8dz0";
+const UPLOAD_PRESET = "tolg6s3q";
+
+const video = document.getElementById("camera");
+const gallery = document.getElementById("gallery");
+const grid = document.getElementById("grid");
+
+let photos = [];
+
+// camera
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => video.srcObject = stream);
+
+// chụp
+function takePhoto() {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+
+  const data = canvas.toDataURL("image/png");
+  photos.push(data);
+
+  const img = document.createElement("img");
+  img.src = data;
+  img.className = "photo";
+
+  gallery.prepend(img);
+}
+
+// sang màn chọn
+function goNext() {
+  screen1.classList.remove("active");
+  screen2.classList.add("active");
+
+  grid.innerHTML = "";
+
+  photos.forEach((src) => {
+    const div = document.createElement("div");
+    div.className = "item selected";
+
+    const img = document.createElement("img");
+    img.src = src;
+
+    div.appendChild(img);
+
+    div.onclick = () => {
+      div.classList.toggle("selected");
+    };
+
+    grid.appendChild(div);
+  });
+}
+
+// quay lại
+function goHome() {
+  screen2.classList.remove("active");
+  screen1.classList.add("active");
+}
+
+// upload cloud
+async function uploadToCloud(base64) {
+  const formData = new FormData();
+  formData.append("file", base64);
+  formData.append("upload_preset", UPLOAD_PRESET);
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+    { method: "POST", body: formData }
+  );
+
+  const data = await res.json();
+  return data.secure_url;
+}
+
+// xuất ảnh + QR
+async function exportImages() {
+
+  const selected = [];
+  const leftover = [];
+
+  document.querySelectorAll(".item").forEach((item, i) => {
+    if (item.classList.contains("selected")) {
+      selected.push(photos[i]);
+    } else {
+      leftover.push(photos[i]);
+    }
+  });
+
+  if (selected.length === 0) {
+    alert("Chọn ít nhất 1 ảnh!");
+    return;
+  }
+
+  const imgs = await Promise.all(selected.map(src => {
+    return new Promise(res => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => res(img);
+    });
+  }));
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const gap = 20;
+  const padding = 20;
+
+  canvas.width = imgs[0].width + padding * 2;
+  canvas.height =
+    imgs[0].height * imgs.length +
+    gap * (imgs.length - 1) +
+    padding * 2;
+
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  imgs.forEach((img, i) => {
+    ctx.drawImage(img, padding, padding + i * (img.height + gap));
+  });
+
+  // tạo link QR
+  let finalLink = null;
+
+  if (leftover.length > 0) {
+    let urls = [];
+
+    for (let img of leftover) {
+      const url = await uploadToCloud(img);
+      urls.push(url);
+    }
+
+    finalLink = urls.join("\n");
+  }
+
+  // vẽ QR (FIX 100%)
+  if (finalLink) {
+    const qrImg = new Image();
+    qrImg.crossOrigin = "anonymous";
+
+    await new Promise((resolve) => {
+      qrImg.onload = () => {
+        ctx.drawImage(
+          qrImg,
+          canvas.width - 140,
+          canvas.height - 140,
+          120,
+          120
+        );
+        resolve();
+      };
+
+      qrImg.onerror = () => {
+        console.log("QR lỗi");
+        resolve();
+      };
+
+      qrImg.src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" +
+        encodeURIComponent(finalLink);
+    });
+  }
+
+  // tải ảnh
+  const link = document.createElement("a");
+  link.download = "photobooth.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+</script>
+
+</body>
+</html>
